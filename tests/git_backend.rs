@@ -98,7 +98,9 @@ fn commit_body_survives_the_round_trip() {
     let s = Scratch::new("body");
     std::fs::write(s.file("p.txt"), b"x").unwrap();
     let store = store(&s, "p.txt");
-    store.commit("subject line", "first detail\nsecond detail").unwrap();
+    store
+        .commit("subject line", "first detail\nsecond detail")
+        .unwrap();
 
     let log = store.log(None).unwrap();
     assert_eq!(log[0].subject, "subject line");
@@ -123,7 +125,10 @@ fn restore_is_byte_for_byte() {
     store.restore("HEAD").unwrap();
 
     let back = std::fs::read(s.file("p.kdenlive")).unwrap();
-    assert_eq!(back, awkward, "restored file must match the committed bytes");
+    assert_eq!(
+        back, awkward,
+        "restored file must match the committed bytes"
+    );
 }
 
 #[test]
@@ -181,7 +186,10 @@ fn branch_and_checkout_switch_the_file() {
     );
 
     store.checkout("experiment").unwrap();
-    assert_eq!(std::fs::read(s.file("p.txt")).unwrap(), b"experimental work");
+    assert_eq!(
+        std::fs::read(s.file("p.txt")).unwrap(),
+        b"experimental work"
+    );
 }
 
 #[test]

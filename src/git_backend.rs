@@ -50,8 +50,7 @@ impl Store {
 
         let git_dir = dir.join(STORE_DIR);
         let repo = if git_dir.exists() {
-            Repository::open(&git_dir)
-                .with_context(|| format!("opening {}", git_dir.display()))?
+            Repository::open(&git_dir).with_context(|| format!("opening {}", git_dir.display()))?
         } else {
             let repo = Repository::init_bare(&git_dir)
                 .with_context(|| format!("creating {}", git_dir.display()))?;
@@ -80,8 +79,7 @@ impl Store {
     /// this is the guard against empty commits when a save changed nothing.
     pub fn commit(&self, subject: &str, body: &str) -> Result<Option<Oid>> {
         let path = self.tracked_path()?;
-        let bytes = std::fs::read(&path)
-            .with_context(|| format!("reading {}", path.display()))?;
+        let bytes = std::fs::read(&path).with_context(|| format!("reading {}", path.display()))?;
 
         let blob = self.repo.blob(&bytes)?;
         if let Some(parent) = self.head_commit()? {
@@ -95,7 +93,10 @@ impl Store {
         // Build the tree from the blob directly instead of staging from disk,
         // so nothing between here and the object store can rewrite the bytes.
         let mut builder = self.repo.treebuilder(None)?;
-        let name = self.tracked.to_str().context("project file name is not UTF-8")?;
+        let name = self
+            .tracked
+            .to_str()
+            .context("project file name is not UTF-8")?;
         builder.insert(name, blob, 0o100_644)?;
         let tree = self.repo.find_tree(builder.write()?)?;
 
@@ -109,14 +110,9 @@ impl Store {
         let parents: Vec<Commit> = self.head_commit()?.into_iter().collect();
         let parent_refs: Vec<&Commit> = parents.iter().collect();
 
-        let oid = self.repo.commit(
-            Some("HEAD"),
-            &who,
-            &who,
-            &message,
-            &tree,
-            &parent_refs,
-        )?;
+        let oid = self
+            .repo
+            .commit(Some("HEAD"), &who, &who, &message, &tree, &parent_refs)?;
 
         // Keep the index in step with the new commit, otherwise libgit2 sees
         // the work tree as dirty on the next checkout and refuses it.
@@ -127,7 +123,10 @@ impl Store {
     /// Points the index at the committed blob without touching the file.
     fn sync_index(&self, blob: Oid, bytes: &[u8]) -> Result<()> {
         let mut index = self.repo.index()?;
-        let name = self.tracked.to_str().context("project file name is not UTF-8")?;
+        let name = self
+            .tracked
+            .to_str()
+            .context("project file name is not UTF-8")?;
         index.add(&IndexEntry {
             ctime: IndexTime::new(0, 0),
             mtime: IndexTime::new(0, 0),
@@ -186,8 +185,7 @@ impl Store {
     pub fn restore(&self, rev: &str) -> Result<()> {
         let bytes = self.file_at(rev)?;
         let path = self.tracked_path()?;
-        write_atomically(&path, &bytes)
-            .with_context(|| format!("restoring {}", path.display()))?;
+        write_atomically(&path, &bytes).with_context(|| format!("restoring {}", path.display()))?;
 
         let blob = self.repo.blob(&bytes)?;
         self.sync_index(blob, &bytes)?;
@@ -221,7 +219,10 @@ impl Store {
             .find_branch(name, git2::BranchType::Local)
             .with_context(|| format!("no such branch: {name}"))?
             .into_reference();
-        let refname = reference.name().context("branch name is not UTF-8")?.to_string();
+        let refname = reference
+            .name()
+            .context("branch name is not UTF-8")?
+            .to_string();
 
         let tree = reference.peel(ObjectType::Tree)?;
         // Force is deliberate. The point of a checkout here is to make the
@@ -295,7 +296,9 @@ fn write_atomically(path: &Path, bytes: &[u8]) -> Result<()> {
     let dir = path.parent().context("path has no parent directory")?;
     let temp = dir.join(format!(
         ".{}.cutback-tmp",
-        path.file_name().and_then(|n| n.to_str()).unwrap_or("project")
+        path.file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("project")
     ));
 
     std::fs::write(&temp, bytes)?;

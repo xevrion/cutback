@@ -7,7 +7,9 @@
 use std::path::PathBuf;
 
 fn data(name: &str) -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/data").join(name)
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/data")
+        .join(name)
 }
 
 fn parse(name: &str) -> cutback::model::Project {
@@ -92,7 +94,11 @@ fn clips_lay_end_to_end_on_the_track() {
 #[test]
 fn clip_durations_come_from_in_and_out_points() {
     let p = parse("timelapse-a.kdenlive");
-    let v1 = p.sequences[0].tracks.iter().find(|t| t.name == "V1").unwrap();
+    let v1 = p.sequences[0]
+        .tracks
+        .iter()
+        .find(|t| t.name == "V1")
+        .unwrap();
     let first = &v1.clips[0];
     // in=0 out=228 is 229 frames, MLT counts the out point as included.
     assert_eq!((first.source_in, first.source_out), (0, 228));
@@ -112,11 +118,18 @@ fn reads_json_markers() {
 
 #[test]
 fn every_sequence_has_a_uuid() {
-    for name in ["timelapse-a.kdenlive", "timelapse-b.kdenlive", "markers.kdenlive"] {
+    for name in [
+        "timelapse-a.kdenlive",
+        "timelapse-b.kdenlive",
+        "markers.kdenlive",
+    ] {
         let p = parse(name);
         assert!(!p.sequences.is_empty(), "{name} has a timeline");
         for seq in &p.sequences {
-            assert!(seq.uuid.starts_with('{'), "{name}: sequence uuid looks wrong");
+            assert!(
+                seq.uuid.starts_with('{'),
+                "{name}: sequence uuid looks wrong"
+            );
         }
     }
 }
@@ -161,5 +174,8 @@ fn refuses_a_newer_document_version() {
  </playlist>
 </mlt>"#;
     let err = cutback::xml_parser::parse_str(doc).unwrap_err();
-    assert!(err.to_string().contains("unsupported project format"), "{err}");
+    assert!(
+        err.to_string().contains("unsupported project format"),
+        "{err}"
+    );
 }

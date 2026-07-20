@@ -19,17 +19,23 @@ pub enum Value {
 
 impl Object {
     pub fn str(&self, key: &str) -> Option<&str> {
-        self.fields.iter().find(|(k, _)| k == key).and_then(|(_, v)| match v {
-            Value::Str(s) => Some(s.as_str()),
-            _ => None,
-        })
+        self.fields
+            .iter()
+            .find(|(k, _)| k == key)
+            .and_then(|(_, v)| match v {
+                Value::Str(s) => Some(s.as_str()),
+                _ => None,
+            })
     }
 
     pub fn num(&self, key: &str) -> Option<f64> {
-        self.fields.iter().find(|(k, _)| k == key).and_then(|(_, v)| match v {
-            Value::Num(n) => Some(*n),
-            _ => None,
-        })
+        self.fields
+            .iter()
+            .find(|(k, _)| k == key)
+            .and_then(|(_, v)| match v {
+                Value::Num(n) => Some(*n),
+                _ => None,
+            })
     }
 }
 

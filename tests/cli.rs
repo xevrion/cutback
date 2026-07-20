@@ -35,7 +35,9 @@ fn binary() -> PathBuf {
 }
 
 fn sample(name: &str) -> String {
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/data").join(name);
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/data")
+        .join(name);
     std::fs::read_to_string(path).expect("sample file")
 }
 
@@ -46,7 +48,10 @@ struct Output {
 }
 
 fn run(args: &[&str]) -> Output {
-    let out = Command::new(binary()).args(args).output().expect("running cutback");
+    let out = Command::new(binary())
+        .args(args)
+        .output()
+        .expect("running cutback");
     Output {
         stdout: String::from_utf8_lossy(&out.stdout).into_owned(),
         stderr: String::from_utf8_lossy(&out.stderr).into_owned(),
@@ -124,7 +129,15 @@ fn restore_returns_the_exact_original_bytes() {
     let file = s.path().join("holiday.kdenlive");
 
     let log = run(&["log", "-C", dir]);
-    let first = log.stdout.lines().last().unwrap().split_whitespace().next().unwrap().to_string();
+    let first = log
+        .stdout
+        .lines()
+        .last()
+        .unwrap()
+        .split_whitespace()
+        .next()
+        .unwrap()
+        .to_string();
 
     let out = run(&["restore", "-C", dir, &first, "-y"]);
     assert!(out.ok, "{}", out.stderr);
@@ -237,7 +250,13 @@ fn a_directory_with_no_project_says_so() {
 #[test]
 fn an_unknown_revision_is_reported_clearly() {
     let s = project_with_history("badrev");
-    let out = run(&["restore", "-C", s.path().to_str().unwrap(), "nosuchrev", "-y"]);
+    let out = run(&[
+        "restore",
+        "-C",
+        s.path().to_str().unwrap(),
+        "nosuchrev",
+        "-y",
+    ]);
     assert!(!out.ok);
     assert!(out.stderr.contains("no such revision"), "{}", out.stderr);
 }
@@ -245,8 +264,16 @@ fn an_unknown_revision_is_reported_clearly() {
 #[test]
 fn a_directory_with_two_projects_asks_which_one() {
     let s = Scratch::new("ambiguous");
-    std::fs::write(s.path().join("one.kdenlive"), sample("timelapse-a.kdenlive")).unwrap();
-    std::fs::write(s.path().join("two.kdenlive"), sample("timelapse-a.kdenlive")).unwrap();
+    std::fs::write(
+        s.path().join("one.kdenlive"),
+        sample("timelapse-a.kdenlive"),
+    )
+    .unwrap();
+    std::fs::write(
+        s.path().join("two.kdenlive"),
+        sample("timelapse-a.kdenlive"),
+    )
+    .unwrap();
 
     let out = run(&["log", "-C", s.path().to_str().unwrap()]);
     assert!(!out.ok);

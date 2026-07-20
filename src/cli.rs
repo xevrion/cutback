@@ -36,10 +36,12 @@ pub struct Cli {
 #[derive(Subcommand)]
 enum Command {
     /// Watch a project and commit every save
-    #[command(long_about = "Watches the project for saves and commits each one automatically.\n\n\
+    #[command(
+        long_about = "Watches the project for saves and commits each one automatically.\n\n\
                             Runs in the foreground. Leave it running while you edit, and stop it \n\
                             with Ctrl-C. Saves made while it is not running are picked up the \n\
-                            next time it starts.")]
+                            next time it starts."
+    )]
     Watch {
         /// Project directory, or the .kdenlive file itself
         #[arg(value_name = "PATH", default_value = ".")]
@@ -79,10 +81,12 @@ enum Command {
     },
 
     /// Restore the project to an earlier revision
-    #[command(long_about = "Restores the project file to its exact state at a revision.\n\n\
+    #[command(
+        long_about = "Restores the project file to its exact state at a revision.\n\n\
                             The restored file is byte for byte what Kdenlive wrote at that point. \n\
                             Close the project in Kdenlive first, otherwise it will overwrite the \n\
-                            restored file on its next save.")]
+                            restored file on its next save."
+    )]
     Restore {
         #[command(flatten)]
         project: ProjectArg,
@@ -97,9 +101,11 @@ enum Command {
     },
 
     /// Create a branch from the current state
-    #[command(long_about = "Creates a branch at the current state, for trying an alternate cut.\n\n\
+    #[command(
+        long_about = "Creates a branch at the current state, for trying an alternate cut.\n\n\
                             Creating a branch does not switch to it. Use 'cutback checkout' for \n\
-                            that.")]
+                            that."
+    )]
     Branch {
         #[command(flatten)]
         project: ProjectArg,
@@ -136,15 +142,29 @@ enum Command {
 #[derive(Args)]
 struct ProjectArg {
     /// Project directory, or the .kdenlive file itself
-    #[arg(short = 'C', long = "project", value_name = "PATH", default_value = ".", global = true)]
+    #[arg(
+        short = 'C',
+        long = "project",
+        value_name = "PATH",
+        default_value = ".",
+        global = true
+    )]
     path: PathBuf,
 }
 
 pub fn run(cli: Cli) -> Result<()> {
     match cli.command {
         Command::Watch { path } => watch(&path),
-        Command::Log { project, limit, full } => log(&project.path, limit, full),
-        Command::Diff { project, rev1, rev2 } => show_diff(&project.path, rev1, rev2),
+        Command::Log {
+            project,
+            limit,
+            full,
+        } => log(&project.path, limit, full),
+        Command::Diff {
+            project,
+            rev1,
+            rev2,
+        } => show_diff(&project.path, rev1, rev2),
         Command::Restore { project, rev, yes } => restore(&project.path, &rev, yes),
         Command::Branch { project, name } => branch(&project.path, name),
         Command::Checkout { project, name } => checkout(&project.path, &name),
@@ -236,7 +256,10 @@ fn watch(path: &Path) -> Result<()> {
         Some(changes) if !changes.is_empty() => {
             let lines = render(changes, fps);
             (
-                format!("{} (saved while cutback was not running)", summarize(changes, fps)),
+                format!(
+                    "{} (saved while cutback was not running)",
+                    summarize(changes, fps)
+                ),
                 lines.join("\n"),
             )
         }
@@ -365,10 +388,7 @@ fn parse_revision(store: &Store, rev: &str) -> Result<Project> {
 fn restore(path: &Path, rev: &str, assume_yes: bool) -> Result<()> {
     let (store, file) = open(path)?;
     let commit = store.resolve(rev)?;
-    let subject = commit
-        .summary()
-        .unwrap_or("(no description)")
-        .to_string();
+    let subject = commit.summary().unwrap_or("(no description)").to_string();
 
     if !assume_yes {
         println!(
@@ -391,7 +411,11 @@ fn restore(path: &Path, rev: &str, assume_yes: bool) -> Result<()> {
     }
 
     store.restore(rev)?;
-    println!("restored {} to {}", display_name(&file), &commit.id().to_string()[..7]);
+    println!(
+        "restored {} to {}",
+        display_name(&file),
+        &commit.id().to_string()[..7]
+    );
     Ok(())
 }
 
@@ -417,12 +441,18 @@ fn checkout(path: &Path, name: &str) -> Result<()> {
     let (store, file) = open(path)?;
 
     // Committing first means an uncommitted edit is not lost by the switch.
-    if store.commit("Saved before switching branches", "")?.is_some() {
+    if store
+        .commit("Saved before switching branches", "")?
+        .is_some()
+    {
         println!("recorded the current state first");
     }
 
     store.checkout(name)?;
-    println!("switched to {name}, {} now holds that branch's state", display_name(&file));
+    println!(
+        "switched to {name}, {} now holds that branch's state",
+        display_name(&file)
+    );
     Ok(())
 }
 

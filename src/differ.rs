@@ -111,17 +111,41 @@ pub struct ParamChange {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum MarkerChange {
-    Added { position: Frames, comment: String },
-    Removed { position: Frames, comment: String },
-    Moved { from: Frames, to: Frames, comment: String },
-    Retitled { position: Frames, from: String, to: String },
+    Added {
+        position: Frames,
+        comment: String,
+    },
+    Removed {
+        position: Frames,
+        comment: String,
+    },
+    Moved {
+        from: Frames,
+        to: Frames,
+        comment: String,
+    },
+    Retitled {
+        position: Frames,
+        from: String,
+        to: String,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum GuideChange {
-    Added { position: Frames, comment: String },
-    Removed { position: Frames, comment: String },
-    Retitled { position: Frames, from: String, to: String },
+    Added {
+        position: Frames,
+        comment: String,
+    },
+    Removed {
+        position: Frames,
+        comment: String,
+    },
+    Retitled {
+        position: Frames,
+        from: String,
+        to: String,
+    },
 }
 
 pub fn diff(before: &Project, after: &Project) -> Diff {
@@ -387,7 +411,11 @@ fn diff_effects(
         new_by_name.entry(e.name.as_str()).or_default().push(e);
     }
 
-    let names: BTreeSet<&str> = old_by_name.keys().chain(new_by_name.keys()).copied().collect();
+    let names: BTreeSet<&str> = old_by_name
+        .keys()
+        .chain(new_by_name.keys())
+        .copied()
+        .collect();
 
     for name in names {
         let olds = old_by_name.get(name).map(Vec::as_slice).unwrap_or_default();

@@ -12,7 +12,9 @@ use cutback::model::Project;
 use cutback::render::{render, summarize};
 
 fn read(name: &str) -> String {
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/data").join(name);
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/data")
+        .join(name);
     std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()))
 }
 
@@ -33,15 +35,26 @@ fn reordered_xml_is_not_a_change() {
     let a = parse(&read("timelapse-a.kdenlive"));
     let b = parse(&read("timelapse-b.kdenlive"));
     let d = diff(&a, &b);
-    assert!(d.is_empty(), "expected no changes, got {:?}", render(&d, 30.0));
+    assert!(
+        d.is_empty(),
+        "expected no changes, got {:?}",
+        render(&d, 30.0)
+    );
     assert_eq!(summarize(&d, 30.0), "saved with no detected changes");
 }
 
 #[test]
 fn a_file_against_itself_has_no_changes() {
-    for name in ["timelapse-a.kdenlive", "timelapse-c.kdenlive", "markers.kdenlive"] {
+    for name in [
+        "timelapse-a.kdenlive",
+        "timelapse-c.kdenlive",
+        "markers.kdenlive",
+    ] {
         let p = parse(&read(name));
-        assert!(diff(&p, &p).is_empty(), "{name} should not differ from itself");
+        assert!(
+            diff(&p, &p).is_empty(),
+            "{name} should not differ from itself"
+        );
     }
 }
 
@@ -56,7 +69,8 @@ fn detects_clips_and_bin_items_added_between_real_saves() {
         "expected a bin addition, got {out:?}"
     );
     assert!(
-        out.iter().any(|l| l.starts_with("added") && l.contains(" to V2 at ")),
+        out.iter()
+            .any(|l| l.starts_with("added") && l.contains(" to V2 at ")),
         "expected clips added to V2, got {out:?}"
     );
 }
@@ -93,12 +107,18 @@ fn moving_a_clip_reads_as_a_move() {
         .filter(|c| matches!(c.kind, ClipChangeKind::Moved { .. }))
         .collect();
 
-    assert_eq!(moves.len(), 1, "expected one move, got {:?}", d.clip_changes);
+    assert_eq!(
+        moves.len(),
+        1,
+        "expected one move, got {:?}",
+        d.clip_changes
+    );
     assert_eq!(moves[0].track, "V2");
     assert!(
-        !d.clip_changes
-            .iter()
-            .any(|c| matches!(c.kind, ClipChangeKind::Added { .. } | ClipChangeKind::Removed { .. })),
+        !d.clip_changes.iter().any(|c| matches!(
+            c.kind,
+            ClipChangeKind::Added { .. } | ClipChangeKind::Removed { .. }
+        )),
         "a move must not also report an add or a remove"
     );
 }
@@ -156,7 +176,11 @@ fn changing_an_effect_parameter_names_it() {
     let out = lines(&parse(&original), &parse(&louder));
     assert_eq!(out.len(), 1, "{out:?}");
     assert!(out[0].contains("gain 0.25 to 0.75"), "{}", out[0]);
-    assert!(out[0].ends_with("A1"), "the line should name the track: {}", out[0]);
+    assert!(
+        out[0].ends_with("A1"),
+        "the line should name the track: {}",
+        out[0]
+    );
     // The effect here is named "gain" and so is its only parameter. Saying it
     // twice reads badly, so the effect name is dropped in that case.
     assert!(!out[0].contains("gain effect"), "{}", out[0]);
@@ -170,7 +194,8 @@ fn marker_changes_are_reported_with_their_text() {
 
     let out = lines(&parse(&original), &parse(&renamed));
     assert!(
-        out.iter().any(|l| l.contains("Gap") && l.contains("Cut here")),
+        out.iter()
+            .any(|l| l.contains("Gap") && l.contains("Cut here")),
         "{out:?}"
     );
 }
@@ -181,7 +206,8 @@ fn profile_changes_are_reported() {
     let changed = original.replacen(r#"frame_rate_num="30""#, r#"frame_rate_num="60""#, 1);
     let out = lines(&parse(&original), &parse(&changed));
     assert!(
-        out.iter().any(|l| l.contains("frame rate") && l.contains("30 fps") && l.contains("60 fps")),
+        out.iter()
+            .any(|l| l.contains("frame rate") && l.contains("30 fps") && l.contains("60 fps")),
         "{out:?}"
     );
 }

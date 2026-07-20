@@ -263,7 +263,9 @@ fn parse_sequences(
                 continue;
             };
             // The black_track sits in the track list but is not a user track.
-            let Some(track_tractor) = tractors.iter().find(|t| t.attribute("id") == Some(producer_id))
+            let Some(track_tractor) = tractors
+                .iter()
+                .find(|t| t.attribute("id") == Some(producer_id))
             else {
                 continue;
             };
@@ -354,18 +356,20 @@ fn parse_track_clips(
         for child in playlist.children().filter(Node::is_element) {
             match child.tag_name().name() {
                 "blank" => {
-                    let length = child.attribute("length").ok_or_else(|| ParseError::BadTimecode {
-                        context: format!("blank in {playlist_id}"),
-                        value: String::new(),
-                        reason: "missing length attribute",
-                    })?;
-                    playhead += parse_timecode(length, fps).map_err(|reason| {
-                        ParseError::BadTimecode {
+                    let length =
+                        child
+                            .attribute("length")
+                            .ok_or_else(|| ParseError::BadTimecode {
+                                context: format!("blank in {playlist_id}"),
+                                value: String::new(),
+                                reason: "missing length attribute",
+                            })?;
+                    playhead +=
+                        parse_timecode(length, fps).map_err(|reason| ParseError::BadTimecode {
                             context: format!("blank in {playlist_id}"),
                             value: length.to_string(),
                             reason,
-                        }
-                    })?;
+                        })?;
                 }
                 "entry" => {
                     let clip = parse_entry(child, playlist_id, playhead, producers, fps)?;
@@ -404,11 +408,13 @@ fn parse_entry(
 
     let context = || format!("<entry producer={producer_id:?}> in {playlist_id}");
     let read = |name: &str| -> Result<Frames> {
-        let raw = entry.attribute(name).ok_or_else(|| ParseError::BadTimecode {
-            context: context(),
-            value: String::new(),
-            reason: "missing in/out attribute",
-        })?;
+        let raw = entry
+            .attribute(name)
+            .ok_or_else(|| ParseError::BadTimecode {
+                context: context(),
+                value: String::new(),
+                reason: "missing in/out attribute",
+            })?;
         parse_timecode(raw, fps).map_err(|reason| ParseError::BadTimecode {
             context: context(),
             value: raw.to_string(),
@@ -438,7 +444,10 @@ fn parse_effects(parent: Node) -> Vec<Effect> {
             }
             let name = property(filter, "kdenlive_id").unwrap_or_else(|| service.clone());
             let mut params = BTreeMap::new();
-            for prop in filter.children().filter(|n| n.is_element() && n.tag_name().name() == "property") {
+            for prop in filter
+                .children()
+                .filter(|n| n.is_element() && n.tag_name().name() == "property")
+            {
                 let Some(key) = prop.attribute("name") else {
                     continue;
                 };

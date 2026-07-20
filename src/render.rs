@@ -213,7 +213,12 @@ pub fn summarize(diff: &Diff, fps: f64) -> String {
         n => {
             // Lead with the first change so the log stays scannable, and count
             // the rest rather than truncating mid sentence.
-            format!("{} and {} more change{}", capitalize(&lines[0]), n - 1, if n == 2 { "" } else { "s" })
+            format!(
+                "{} and {} more change{}",
+                capitalize(&lines[0]),
+                n - 1,
+                if n == 2 { "" } else { "s" }
+            )
         }
     }
 }
