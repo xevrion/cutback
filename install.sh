@@ -13,7 +13,7 @@
 set -eu
 
 REPO_URL="https://github.com/xevrion/cutback"
-MIN_RUST="1.82"
+MIN_RUST="1.86"
 
 prefix="${CUTBACK_PREFIX:-$HOME/.local}"
 destdir="${DESTDIR:-}"
@@ -132,7 +132,14 @@ fi
 # Run from the repository if the script sits in one, otherwise fetch it.
 script_dir=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 workdir=""
-cleanup() { [ -n "$workdir" ] && rm -rf "$workdir"; }
+# The EXIT trap runs last, so its final status becomes the script's. Without
+# the else branch this returns 1 whenever workdir is empty, which is every
+# install from a local checkout, and a successful install would exit nonzero.
+cleanup() {
+    if [ -n "$workdir" ]; then
+        rm -rf "$workdir"
+    fi
+}
 trap cleanup EXIT INT TERM
 
 if [ -f "$script_dir/Cargo.toml" ]; then
@@ -212,12 +219,12 @@ if [ -f "$destdir$zsh_completion_dir/_cutback" ] && command -v zsh >/dev/null 2>
     if ! zsh -c "case \"\$fpath\" in *$zsh_completion_dir*) exit 0 ;; *) exit 1 ;; esac" 2>/dev/null; then
         say ""
         warn "zsh will not find the completions in $zsh_completion_dir."
-        say "Add this to ~/.zshrc, above any line that runs compinit or sources"
+        say "Add this to \$HOME/.zshrc, above any line that runs compinit or sources"
         say "oh-my-zsh, then open a new terminal:"
         say ""
         say "    fpath=(\"$zsh_completion_dir\" \$fpath)"
         say ""
-        say "If completions still do not appear, clear the cache: ${dim}rm -f ~/.zcompdump*${reset}"
+        say "If completions still do not appear, clear the cache: ${dim}rm -f \$HOME/.zcompdump*${reset}"
     fi
 fi
 
@@ -226,10 +233,12 @@ case ":$PATH:" in
     *)
         say ""
         warn "$prefix/bin is not on your PATH."
+        # These name a file for the reader, they are never expanded as paths,
+        # so write $HOME rather than a tilde that would not expand if it were.
         case "${SHELL##*/}" in
-            zsh)  rc="~/.zshrc" ;;
-            bash) rc="~/.bashrc" ;;
-            fish) rc="~/.config/fish/config.fish" ;;
+            zsh)  rc="\$HOME/.zshrc" ;;
+            bash) rc="\$HOME/.bashrc" ;;
+            fish) rc="\$HOME/.config/fish/config.fish" ;;
             *)    rc="your shell's startup file" ;;
         esac
         say "Add this to $rc, then open a new terminal:"
