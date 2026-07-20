@@ -202,6 +202,25 @@ install_completion "$destdir$prefix/share/fish/vendor_completions.d" cutback.fis
 say ""
 printf '%sInstalled.%s\n' "$green$bold" "$reset"
 
+# bash and fish read their completion directories under ~/.local by default,
+# so those just work. zsh only searches the fpath it was compiled with, which
+# covers /usr and /usr/local but never a user prefix, and a completion file
+# sitting outside fpath is silently ignored. Say so rather than leaving the
+# user to wonder why tab does nothing.
+zsh_completion_dir="$prefix/share/zsh/site-functions"
+if [ -f "$destdir$zsh_completion_dir/_cutback" ] && command -v zsh >/dev/null 2>&1; then
+    if ! zsh -c "case \"\$fpath\" in *$zsh_completion_dir*) exit 0 ;; *) exit 1 ;; esac" 2>/dev/null; then
+        say ""
+        warn "zsh will not find the completions in $zsh_completion_dir."
+        say "Add this to ~/.zshrc, above any line that runs compinit or sources"
+        say "oh-my-zsh, then open a new terminal:"
+        say ""
+        say "    fpath=(\"$zsh_completion_dir\" \$fpath)"
+        say ""
+        say "If completions still do not appear, clear the cache: ${dim}rm -f ~/.zcompdump*${reset}"
+    fi
+fi
+
 case ":$PATH:" in
     *":$prefix/bin:"*) ;;
     *)
