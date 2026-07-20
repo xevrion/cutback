@@ -1,3 +1,4 @@
+pub mod cli;
 pub mod differ;
 pub mod git_backend;
 pub mod model;
