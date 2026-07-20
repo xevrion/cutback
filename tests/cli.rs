@@ -189,6 +189,43 @@ fn branch_and_checkout_round_trip() {
     );
 }
 
+/// Edits made while the daemon was not running have to be described, not
+/// filed under a generic startup message, or the log hides a real change.
+#[test]
+fn edits_made_while_not_watching_are_described() {
+    let s = Scratch::new("catchup");
+    let dir = s.path().to_str().unwrap();
+    let file = s.path().join("holiday.kdenlive");
+
+    // One commit exists, then the file changes with nothing watching.
+    std::fs::write(&file, sample("timelapse-a.kdenlive")).unwrap();
+    let store = cutback::git_backend::Store::open(s.path(), &file).unwrap();
+    store.commit("Started watching this project", "").unwrap();
+    std::fs::write(&file, sample("timelapse-c.kdenlive")).unwrap();
+    drop(store);
+
+    // Starting the watcher should record that edit and say what it was. Run it
+    // briefly, since watch runs in the foreground until interrupted.
+    let mut child = Command::new(binary())
+        .args(["watch", dir])
+        .stdout(std::process::Stdio::piped())
+        .spawn()
+        .expect("spawn watch");
+    std::thread::sleep(std::time::Duration::from_millis(1500));
+    let _ = child.kill();
+    let _ = child.wait();
+
+    let log = run(&["log", "-C", dir]).stdout;
+    assert!(
+        log.contains("not running"),
+        "the catch up commit should say it happened outside the daemon: {log}"
+    );
+    assert!(
+        log.contains("project bin"),
+        "the catch up commit should describe the edit: {log}"
+    );
+}
+
 #[test]
 fn a_directory_with_no_project_says_so() {
     let s = Scratch::new("empty");

@@ -222,9 +222,34 @@ fn watch(path: &Path) -> Result<()> {
     let fps = previous.profile.fps();
 
     // Record the state at startup so that edits made while the daemon was not
-    // running still land in history.
-    if store.commit("Started watching this project", "")?.is_some() {
+    // running still land in history. Describe them properly where we can:
+    // the file on disk may have moved on since the last commit, and labelling
+    // that "started watching" would hide a real edit in the log.
+    let catch_up = match store.log(Some(1))?.first() {
+        Some(last) => parse_revision(&store, &last.id)
+            .ok()
+            .map(|committed| diff(&committed, &previous)),
+        None => None,
+    };
+
+    let (subject, body) = match &catch_up {
+        Some(changes) if !changes.is_empty() => {
+            let lines = render(changes, fps);
+            (
+                format!("{} (saved while cutback was not running)", summarize(changes, fps)),
+                lines.join("\n"),
+            )
+        }
+        _ => ("Started watching this project".to_string(), String::new()),
+    };
+
+    if store.commit(&subject, &body)?.is_some() {
         println!("recorded the current state of {}", display_name(&file));
+        if let Some(changes) = &catch_up {
+            for line in render(changes, fps) {
+                println!("  {line}");
+            }
+        }
     }
 
     println!("watching {}", file.display());
