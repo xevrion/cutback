@@ -1,0 +1,103 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: -D warnings
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Check formatting
+        run: cargo fmt --check
+
+      - name: Clippy
+        run: cargo clippy --all-targets --locked
+
+      - name: Test
+        run: cargo test --locked
+
+      - name: Build release
+        run: cargo build --release --locked
+
+  # The version floor in Cargo.toml is a promise to anyone installing from
+  # source, so it gets checked rather than assumed.
+  msrv:
+    name: Minimum supported Rust version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.82.0
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --locked
+
+  install:
+    name: Install script
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install to a temporary prefix
+        run: ./install.sh --prefix "$RUNNER_TEMP/prefix" -y
+
+      - name: Check what landed
+        run: |
+          set -eu
+          prefix="$RUNNER_TEMP/prefix"
+          test -x "$prefix/bin/cutback"
+          test -f "$prefix/share/man/man1/cutback.1"
+          test -f "$prefix/share/bash-completion/completions/cutback"
+          "$prefix/bin/cutback" --version
+          "$prefix/bin/cutback" --help > /dev/null
+
+      - name: Uninstall cleanly
+        run: |
+          set -eu
+          ./install.sh --prefix "$RUNNER_TEMP/prefix" --uninstall
+          test ! -e "$RUNNER_TEMP/prefix/bin/cutback"
+
+  shellcheck:
+    name: Shellcheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Syntax check under several shells
+        run: |
+          set -eu
+          for shell in sh dash bash; do
+            "$shell" -n install.sh
+          done
+
+      - run: shellcheck --shell=sh install.sh
+
+  man:
+    name: Man page
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Lint for roff warnings
+        run: |
+          set -eu
+          out=$(man --warnings -l doc/cutback.1 2>&1 >/dev/null)
+          if [ -n "$out" ]; then
+            echo "$out"
+            exit 1
+          fi
