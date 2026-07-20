@@ -34,6 +34,18 @@ fn binary() -> PathBuf {
     path.join("cutback")
 }
 
+/// Commit ids from a log, oldest last. Entry lines start with the graph
+/// marker, so this skips blank lines and any hint text.
+fn log_ids(dir: &str) -> Vec<String> {
+    run(&["log", "-C", dir])
+        .stdout
+        .lines()
+        .filter_map(|l| l.strip_prefix("* "))
+        .filter_map(|l| l.split_whitespace().next())
+        .map(str::to_string)
+        .collect()
+}
+
 fn sample(name: &str) -> String {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("tests/data")
@@ -100,8 +112,10 @@ fn log_reads_as_sentences() {
     assert!(out.ok, "{}", out.stderr);
     assert!(out.stdout.contains("to the project bin"), "{}", out.stdout);
     assert!(out.stdout.contains("ago") || out.stdout.contains("just now"));
-    // No XML should reach the user.
-    assert!(!out.stdout.contains('<'), "{}", out.stdout);
+    // No XML should reach the user, and no escape codes either, since this
+    // output is piped rather than going to a terminal.
+    assert!(!out.stdout.contains("</"), "{}", out.stdout);
+    assert!(!out.stdout.contains('\x1b'), "piped output must be plain");
 }
 
 #[test]
@@ -128,16 +142,7 @@ fn restore_returns_the_exact_original_bytes() {
     let dir = s.path().to_str().unwrap();
     let file = s.path().join("holiday.kdenlive");
 
-    let log = run(&["log", "-C", dir]);
-    let first = log
-        .stdout
-        .lines()
-        .last()
-        .unwrap()
-        .split_whitespace()
-        .next()
-        .unwrap()
-        .to_string();
+    let first = log_ids(dir).last().expect("history has entries").clone();
 
     let out = run(&["restore", "-C", dir, &first, "-y"]);
     assert!(out.ok, "{}", out.stderr);
@@ -155,15 +160,7 @@ fn restore_records_the_current_state_first() {
     let dir = s.path().to_str().unwrap();
 
     let before = run(&["log", "-C", dir]).stdout.lines().count();
-    let first = run(&["log", "-C", dir])
-        .stdout
-        .lines()
-        .last()
-        .unwrap()
-        .split_whitespace()
-        .next()
-        .unwrap()
-        .to_string();
+    let first = log_ids(dir).last().expect("history has entries").clone();
     run(&["restore", "-C", dir, &first, "-y"]);
 
     // Restoring must not lose the state that was on disk, so history grows.
@@ -194,15 +191,7 @@ fn branch_and_checkout_round_trip() {
     let on_original = std::fs::read(&file).unwrap();
     assert!(run(&["checkout", "-C", dir, "alt-cut"]).ok);
 
-    let first = run(&["log", "-C", dir])
-        .stdout
-        .lines()
-        .last()
-        .unwrap()
-        .split_whitespace()
-        .next()
-        .unwrap()
-        .to_string();
+    let first = log_ids(dir).last().expect("history has entries").clone();
     run(&["restore", "-C", dir, &first, "-y"]);
 
     let back = run(&["checkout", "-C", dir, &original]);

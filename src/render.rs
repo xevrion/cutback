@@ -4,6 +4,13 @@
 //! own. Lines are written the way an editor would describe the edit, so
 //! positions read as timecode and effect parameters use the names shown in
 //! Kdenlive's UI where we know them.
+//!
+//! Rendering comes in two flavours and the difference matters. [`render`]
+//! produces plain text, which is what gets stored in commit messages, since
+//! escape codes written into history would be there for good and would show
+//! as garbage in git and anything else reading the repository. [`display`]
+//! adds colour and shortens long clip names, and is only ever used for
+//! output that goes straight to a terminal.
 
 use crate::differ::{
     BinChange, ClipChange, ClipChangeKind, Diff, GuideChange, MarkerChange, ParamChange,
@@ -17,9 +24,53 @@ use crate::xml_parser::format_duration;
 /// them buries the useful part of the line.
 const MAX_NAMED_PARAMS: usize = 3;
 
+/// Clip names get shortened past this. Footage straight off a camera or a
+/// screen recorder has long names that repeat on every line, and the verb and
+/// the timecode are the part worth reading.
+const MAX_CLIP_NAME: usize = 28;
+
+/// Plain text, for storing in a commit message.
 pub fn render(diff: &Diff, fps: f64) -> Vec<String> {
+    render_with(diff, fps, Style::Plain)
+}
+
+/// Coloured and shortened, for printing to a terminal.
+pub fn display(diff: &Diff, fps: f64) -> Vec<String> {
+    render_with(diff, fps, Style::Terminal)
+}
+
+#[derive(Clone, Copy, PartialEq)]
+enum Style {
+    Plain,
+    Terminal,
+}
+
+impl Style {
+    fn clip(self, name: &str) -> String {
+        match self {
+            Style::Plain => name.to_string(),
+            Style::Terminal => crate::term::subject(&crate::term::ellipsize(name, MAX_CLIP_NAME)),
+        }
+    }
+
+    fn track(self, name: &str) -> String {
+        match self {
+            Style::Plain => name.to_string(),
+            Style::Terminal => crate::term::bold(name),
+        }
+    }
+
+    fn time(self, text: &str) -> String {
+        match self {
+            Style::Plain => text.to_string(),
+            Style::Terminal => crate::term::time(text),
+        }
+    }
+}
+
+fn render_with(diff: &Diff, fps: f64, style: Style) -> Vec<String> {
     let mut lines = Vec::new();
-    let at = |f: Frames| format_duration(f, fps);
+    let at = |f: Frames| style.time(&format_duration(f, fps));
 
     for change in &diff.profile_changes {
         lines.push(format!(
@@ -39,14 +90,22 @@ pub fn render(diff: &Diff, fps: f64) -> Vec<String> {
 
     for change in &diff.bin_changes {
         lines.push(match change {
-            BinChange::Added { clip } => format!("added {clip} to the project bin"),
-            BinChange::Removed { clip } => format!("removed {clip} from the project bin"),
-            BinChange::Renamed { from, to } => format!("renamed bin clip {from} to {to}"),
+            BinChange::Added { clip } => {
+                format!("added {} to the project bin", style.clip(clip))
+            }
+            BinChange::Removed { clip } => {
+                format!("removed {} from the project bin", style.clip(clip))
+            }
+            BinChange::Renamed { from, to } => format!(
+                "renamed bin clip {} to {}",
+                style.clip(from),
+                style.clip(to)
+            ),
         });
     }
 
     for change in &diff.clip_changes {
-        lines.push(render_clip_change(change, &at));
+        lines.push(render_clip_change(change, &at, style));
     }
 
     for change in &diff.marker_changes {
@@ -92,8 +151,9 @@ pub fn render(diff: &Diff, fps: f64) -> Vec<String> {
     lines
 }
 
-fn render_clip_change(change: &ClipChange, at: &impl Fn(Frames) -> String) -> String {
-    let (clip, track) = (&change.clip, &change.track);
+fn render_clip_change(change: &ClipChange, at: &impl Fn(Frames) -> String, style: Style) -> String {
+    let clip = &style.clip(&change.clip);
+    let track = &style.track(&change.track);
     match &change.kind {
         ClipChangeKind::Added { position, duration } => format!(
             "added {clip} to {track} at {}, {} long",

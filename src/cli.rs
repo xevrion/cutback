@@ -12,7 +12,8 @@ use clap::{Args, Parser, Subcommand};
 use crate::differ::diff;
 use crate::git_backend::Store;
 use crate::model::Project;
-use crate::render::{render, summarize};
+use crate::render::{display, render, summarize};
+use crate::term;
 use crate::watcher::Watcher;
 use crate::xml_parser;
 
@@ -266,17 +267,39 @@ fn watch(path: &Path) -> Result<()> {
         _ => ("Started watching this project".to_string(), String::new()),
     };
 
-    if store.commit(&subject, &body)?.is_some() {
-        println!("recorded the current state of {}", display_name(&file));
+    let recorded = store.commit(&subject, &body)?.is_some();
+
+    let branch = store.current_branch()?;
+    let saves = store.log(None)?.len();
+    println!(
+        "{} {}  {}",
+        term::bold("watching"),
+        term::subject(&display_name(&file)),
+        term::dim(&format!(
+            "on {branch}, {saves} save{} recorded",
+            if saves == 1 { "" } else { "s" }
+        ))
+    );
+
+    if recorded {
         if let Some(changes) = &catch_up {
-            for line in render(changes, fps) {
-                println!("  {line}");
+            if !changes.is_empty() {
+                println!(
+                    "{}",
+                    term::dim("caught up on edits made while cutback was not running:")
+                );
+                for line in display(changes, fps) {
+                    println!("       {} {}", term::dim("·"), line);
+                }
             }
         }
     }
 
-    println!("watching {}", file.display());
-    println!("stop with Ctrl-C");
+    println!(
+        "{}",
+        term::dim("save in Kdenlive and the change appears here. Ctrl-C to stop")
+    );
+    println!();
 
     let watcher = Watcher::new(&file)?;
     loop {
@@ -302,15 +325,22 @@ fn watch(path: &Path) -> Result<()> {
             continue;
         }
 
-        let lines = render(&changes, fps);
+        // Plain text goes into the commit, coloured text goes to the screen.
+        // Escape codes stored in a message would be in history for good.
         let subject = summarize(&changes, fps);
-        let body = lines.join("\n");
+        let body = render(&changes, fps).join("\n");
+        let shown = display(&changes, fps);
 
         match store.commit(&subject, &body)? {
-            Some(_) => {
-                println!("{subject}");
-                for line in &lines {
-                    println!("  {line}");
+            Some(oid) => {
+                println!(
+                    "{} {}  {}",
+                    term::dim(&clock_time()),
+                    term::commit_id(&oid.to_string()[..7]),
+                    summarize_headline(shown.len()),
+                );
+                for line in &shown {
+                    println!("       {} {}", term::dim("·"), line);
                 }
             }
             None => continue,
@@ -328,19 +358,49 @@ fn log(path: &Path, limit: Option<usize>, full: bool) -> Result<()> {
         return Ok(());
     }
 
+    let branch = store.current_branch()?;
+    let head = entries.first().map(|e| e.id.clone()).unwrap_or_default();
+
     for entry in &entries {
+        let marker = if entry.id == head {
+            term::bold("*")
+        } else {
+            term::dim("*")
+        };
+        let when = relative_time(entry.seconds_since_epoch);
+        let here = if entry.id == head {
+            format!(" {}", term::dim(&format!("(now, on {branch})")))
+        } else {
+            String::new()
+        };
+
         println!(
-            "{}  {}  {}",
-            entry.short_id,
-            relative_time(entry.seconds_since_epoch),
-            entry.subject
+            "{marker} {}  {}  {}{here}",
+            term::commit_id(&entry.short_id),
+            term::dim(&term::pad(&when, 14)),
+            entry.subject,
         );
+
         if full && !entry.body.is_empty() {
             for line in entry.body.lines() {
-                println!("             {line}");
+                println!("{}   {}", term::dim("│"), line);
             }
-            println!();
+            if entry.id != entries[entries.len() - 1].id {
+                println!("{}", term::dim("│"));
+            }
         }
+    }
+
+    // Hints are for a person reading the output, and would be noise or worse
+    // to anything parsing it, so they stop at the terminal.
+    if !full && entries.len() > 1 && term::is_tty() {
+        println!();
+        println!(
+            "{}",
+            term::dim(
+                "see every change with 'cutback log --full', or one save with 'cutback diff <id>'"
+            )
+        );
     }
     Ok(())
 }
@@ -366,14 +426,28 @@ fn show_diff(path: &Path, rev1: Option<String>, rev2: Option<String>) -> Result<
     let after = parse_revision(&store, &to)?;
 
     let changes = diff(&before, &after);
-    let lines = render(&changes, after.profile.fps());
+    let lines = display(&changes, after.profile.fps());
+
+    // Say which two saves this is, since with no arguments the user did not
+    // pick them and otherwise has no idea what is being compared.
+    let (from_commit, to_commit) = (store.resolve(&from)?, store.resolve(&to)?);
+    let describe = |c: &git2::Commit| {
+        format!(
+            "{} {}",
+            term::commit_id(&c.id().to_string()[..7]),
+            term::dim(c.summary().unwrap_or("(no description)"))
+        )
+    };
+    println!("{} {}", term::dim("from"), describe(&from_commit));
+    println!("{}   {}", term::dim("to"), describe(&to_commit));
+    println!();
 
     if lines.is_empty() {
-        println!("no changes between these two saves");
+        println!("{}", term::dim("no changes between these two saves"));
         return Ok(());
     }
     for line in lines {
-        println!("{line}");
+        println!("  {}", line);
     }
     Ok(())
 }
@@ -406,16 +480,26 @@ fn restore(path: &Path, rev: &str, assume_yes: bool) -> Result<()> {
     }
 
     // Keep whatever is on disk now, so a restore is never a one way door.
-    if store.commit("Saved before a restore", "")?.is_some() {
-        println!("recorded the current state first");
+    let saved_first = store.commit("Saved before a restore", "")?.is_some();
+    if saved_first {
+        println!("{}", term::dim("recorded the current state first"));
     }
 
     store.restore(rev)?;
+    let short = &commit.id().to_string()[..7];
     println!(
-        "restored {} to {}",
-        display_name(&file),
-        &commit.id().to_string()[..7]
+        "{} {} is back at {} {}",
+        term::green("restored"),
+        term::subject(&display_name(&file)),
+        term::commit_id(short),
+        term::dim(commit.summary().unwrap_or("")),
     );
+    if saved_first {
+        println!(
+            "{}",
+            term::dim("the state you had before this is the newest entry in 'cutback log'")
+        );
+    }
     Ok(())
 }
 
@@ -424,35 +508,56 @@ fn branch(path: &Path, name: Option<String>) -> Result<()> {
 
     let Some(name) = name else {
         let current = store.current_branch()?;
-        for branch in store.branches()? {
-            let marker = if branch == current { "*" } else { " " };
-            println!("{marker} {branch}");
+        let branches = store.branches()?;
+        for branch in &branches {
+            if *branch == current {
+                println!("{} {}", term::green("*"), term::bold(branch));
+            } else {
+                println!("  {branch}");
+            }
+        }
+        if branches.len() == 1 {
+            println!();
+            println!(
+                "{}",
+                term::dim("start an alternate cut with 'cutback branch <name>'")
+            );
         }
         return Ok(());
     };
 
     store.branch(&name)?;
-    println!("created branch {name}");
-    println!("switch to it with: cutback checkout {name}");
+    println!("{} branch {}", term::green("created"), term::subject(&name));
+    println!(
+        "{}",
+        term::dim(&format!("switch to it with 'cutback checkout {name}'"))
+    );
     Ok(())
 }
 
 fn checkout(path: &Path, name: &str) -> Result<()> {
     let (store, file) = open(path)?;
+    let previous = store.current_branch()?;
 
     // Committing first means an uncommitted edit is not lost by the switch.
     if store
         .commit("Saved before switching branches", "")?
         .is_some()
     {
-        println!("recorded the current state first");
+        println!(
+            "{}",
+            term::dim(&format!("recorded the current state on {previous} first"))
+        );
     }
 
     store.checkout(name)?;
     println!(
-        "switched to {name}, {} now holds that branch's state",
-        display_name(&file)
+        "{} {}, {} now holds that branch's state",
+        term::green("switched to"),
+        term::subject(name),
+        term::subject(&display_name(&file)),
     );
+    println!("{}", term::dim("reopen the project in Kdenlive to see it"));
     Ok(())
 }
 
@@ -473,6 +578,55 @@ fn display_name(file: &Path) -> String {
         .unwrap_or_else(|| file.display().to_string())
 }
 
+/// Headline for one save in the watch log.
+///
+/// Every change is printed underneath, so repeating the first one in the
+/// headline is noise. When there are several, say how many; when there is
+/// one, the detail line below already says it and the headline can be short.
+fn summarize_headline(count: usize) -> String {
+    match count {
+        1 => "1 change".to_string(),
+        n => format!("{n} changes"),
+    }
+}
+
+/// Wall clock time for the watch log, where entries arrive as you work and
+/// "3 minutes ago" would be wrong by the time you read it.
+fn clock_time() -> String {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    // Local time without pulling in a date library. The offset comes from the
+    // difference the OS reports for this timestamp.
+    let secs_today = (now % 86_400) as i64 + local_offset_seconds();
+    let secs_today = secs_today.rem_euclid(86_400);
+    format!("{:02}:{:02}", secs_today / 3600, (secs_today % 3600) / 60)
+}
+
+/// Seconds east of UTC, read once from the TZ database via libc's localtime.
+fn local_offset_seconds() -> i64 {
+    static OFFSET: std::sync::OnceLock<i64> = std::sync::OnceLock::new();
+    *OFFSET.get_or_init(|| {
+        // date is present on every Linux and avoids a chrono dependency for
+        // one number that cannot change while the process runs.
+        std::process::Command::new("date")
+            .arg("+%z")
+            .output()
+            .ok()
+            .and_then(|o| String::from_utf8(o.stdout).ok())
+            .and_then(|s| {
+                let s = s.trim();
+                let sign = if s.starts_with('-') { -1 } else { 1 };
+                let digits = s.trim_start_matches(['+', '-']);
+                let hours: i64 = digits.get(0..2)?.parse().ok()?;
+                let minutes: i64 = digits.get(2..4)?.parse().ok()?;
+                Some(sign * (hours * 3600 + minutes * 60))
+            })
+            .unwrap_or(0)
+    })
+}
+
 /// Commit times read better as "20 minutes ago" than as a date when you are
 /// looking for the save you made a moment ago.
 fn relative_time(seconds_since_epoch: i64) -> String {
@@ -483,12 +637,12 @@ fn relative_time(seconds_since_epoch: i64) -> String {
 
     let elapsed = now.saturating_sub(seconds_since_epoch).max(0);
     let (value, unit) = match elapsed {
-        s if s < 60 => return format!("{:>12}", "just now"),
+        s if s < 60 => return "just now".to_string(),
         s if s < 3600 => (s / 60, "minute"),
         s if s < 86_400 => (s / 3600, "hour"),
         s if s < 2_592_000 => (s / 86_400, "day"),
         s => (s / 2_592_000, "month"),
     };
     let plural = if value == 1 { "" } else { "s" };
-    format!("{:>12}", format!("{value} {unit}{plural} ago"))
+    format!("{value} {unit}{plural} ago")
 }
