@@ -22,7 +22,7 @@ use crate::model::{
     TrackKind,
 };
 
-pub use timecode::parse_timecode;
+pub use timecode::{format_duration, parse_timecode};
 
 #[derive(Debug, thiserror::Error)]
 pub enum ParseError {
