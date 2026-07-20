@@ -2,7 +2,7 @@
 name = "cutback"
 version = "0.1.0"
 edition = "2021"
-rust-version = "1.82"
+rust-version = "1.86"
 description = "Automatic version control for Kdenlive projects"
 license = "MIT"
 repository = "https://github.com/xevrion/cutback"
