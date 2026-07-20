@@ -118,6 +118,19 @@ enum Command {
         #[arg(value_name = "NAME")]
         name: String,
     },
+
+    /// Print a shell completion script
+    #[command(long_about = "Prints a completion script for the given shell.\n\n\
+                            bash:  cutback completions bash > \
+                            ~/.local/share/bash-completion/completions/cutback\n\
+                            zsh:   cutback completions zsh > ~/.zfunc/_cutback\n\
+                            fish:  cutback completions fish > \
+                            ~/.config/fish/completions/cutback.fish")]
+    Completions {
+        /// Shell to generate for
+        #[arg(value_name = "SHELL")]
+        shell: clap_complete::Shell,
+    },
 }
 
 #[derive(Args)]
@@ -135,6 +148,12 @@ pub fn run(cli: Cli) -> Result<()> {
         Command::Restore { project, rev, yes } => restore(&project.path, &rev, yes),
         Command::Branch { project, name } => branch(&project.path, name),
         Command::Checkout { project, name } => checkout(&project.path, &name),
+        Command::Completions { shell } => {
+            use clap::CommandFactory;
+            let mut command = Cli::command();
+            clap_complete::generate(shell, &mut command, "cutback", &mut std::io::stdout());
+            Ok(())
+        }
     }
 }
 
@@ -204,7 +223,7 @@ fn watch(path: &Path) -> Result<()> {
 
     // Record the state at startup so that edits made while the daemon was not
     // running still land in history.
-    if let Some(_) = store.commit("Started watching this project", "")? {
+    if store.commit("Started watching this project", "")?.is_some() {
         println!("recorded the current state of {}", display_name(&file));
     }
 

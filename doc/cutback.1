@@ -1,0 +1,221 @@
+.TH CUTBACK 1 "2026-07-20" "cutback 0.1.0" "User Commands"
+.SH NAME
+cutback \- version control for Kdenlive projects, in plain English
+.SH SYNOPSIS
+.B cutback watch
+.RI [ PATH ]
+.br
+.B cutback log
+.RB [ \-C
+.IR PATH ]
+.RB [ \-n
+.IR COUNT ]
+.RB [ \-\-full ]
+.br
+.B cutback diff
+.RB [ \-C
+.IR PATH ]
+.RI [ REV1 " [" REV2 ]]
+.br
+.B cutback restore
+.RB [ \-C
+.IR PATH ]
+.RB [ \-y ]
+.I REV
+.br
+.B cutback branch
+.RB [ \-C
+.IR PATH ]
+.RI [ NAME ]
+.br
+.B cutback checkout
+.RB [ \-C
+.IR PATH ]
+.I NAME
+.SH DESCRIPTION
+.B cutback
+watches a Kdenlive project file and commits every save to a local git
+repository, without any interaction. It then describes what changed between
+any two points in that history as sentences an editor can read, such as
+.RB \(lq "trimmed interview.mp4 on V2, 0:08 to 0:05" \(rq,
+instead of a diff of MLT XML.
+.PP
+The repository lives in a
+.I .cutback
+directory beside the project. A project folder that is already a git
+repository keeps working normally, since
+.B cutback
+never touches
+.IR .git .
+.PP
+Media is never copied. Kdenlive project files reference footage by path
+rather than embedding it, so the history stays small no matter how much
+footage the project uses.
+.SH COMMANDS
+.TP
+.B watch \fR[\fIPATH\fR]
+Watch the project and commit each completed save. Runs in the foreground;
+stop it with Ctrl\-C. The state at startup is recorded first, so edits made
+while
+.B cutback
+was not running are not lost.
+.IP
+A save that produces no semantic change makes no commit, because Kdenlive
+rewrites the whole document every time it saves. A save that cannot be
+parsed is reported and skipped rather than committed.
+.TP
+.B log
+Show the history, newest first, one line per save.
+.TP
+.B diff \fR[\fIREV1\fR [\fIREV2\fR]]
+Describe what changed between two revisions. With no arguments, compares the
+two most recent saves. With one, compares that revision against the one
+before it.
+.TP
+.B restore \fIREV\fR
+Restore the project file to its exact state at
+.IR REV .
+The file written is byte for byte the one Kdenlive originally wrote. Whatever
+is on disk is committed first, so a restore never discards work.
+.TP
+.B branch \fR[\fINAME\fR]
+Create a branch at the current state, for trying an alternate cut. With no
+name, lists the branches and marks the current one. Creating a branch does
+not switch to it.
+.TP
+.B checkout \fINAME\fR
+Switch to a branch and restore the project file to that branch's state. The
+current state is committed first.
+.SH OPTIONS
+.TP
+.BR \-C ", " \-\-project " " \fIPATH\fR
+The project directory, or the
+.I .kdenlive
+file itself. Defaults to the current directory. If a directory holds more
+than one project file,
+.B cutback
+asks which one rather than guessing.
+.TP
+.BR \-n ", " \-\-limit " " \fICOUNT\fR
+Show at most
+.I COUNT
+entries.
+.RB ( log
+only.)
+.TP
+.B \-\-full
+Show every change for each entry, not just the one line summary.
+.RB ( log
+only.)
+.TP
+.BR \-y ", " \-\-yes
+Do not ask for confirmation.
+.RB ( restore
+only.)
+.TP
+.BR \-h ", " \-\-help
+Print help. Use
+.B \-\-help
+rather than
+.B \-h
+for the longer description of a command.
+.TP
+.BR \-V ", " \-\-version
+Print the version.
+.SH REVISIONS
+A revision is the short id shown by
+.BR "cutback log" ,
+or anything git can resolve, including
+.BR HEAD ,
+.BR HEAD~3 ,
+and branch names.
+.SH EXAMPLES
+Start watching the project in the current directory:
+.PP
+.RS
+.EX
+cutback watch
+.EE
+.RE
+.PP
+See what has happened, most recent first:
+.PP
+.RS
+.EX
+cutback log
+.EE
+.RE
+.PP
+See what the last save changed:
+.PP
+.RS
+.EX
+cutback diff
+.EE
+.RE
+.PP
+Compare two specific points:
+.PP
+.RS
+.EX
+cutback diff 8126417 5ee6275
+.EE
+.RE
+.PP
+Go back to an earlier state, after closing the project in Kdenlive:
+.PP
+.RS
+.EX
+cutback restore 5ee6275
+.EE
+.RE
+.PP
+Try an alternate cut without disturbing the current one:
+.PP
+.RS
+.EX
+cutback branch short\-version
+cutback checkout short\-version
+.EE
+.RE
+.SH FILES
+.TP
+.I <project>/.cutback/
+The git repository holding the history for that project. Deleting it deletes
+the history and nothing else.
+.SH NOTES
+Close the project in Kdenlive before running
+.B restore
+or
+.BR checkout .
+Kdenlive holds the document in memory and will write it back over the
+restored file on its next save.
+.PP
+.B cutback
+reads the project file to build a description of the changes and writes back
+only the exact bytes it stored earlier. It never edits or regenerates the
+XML, which matters because a project using track wide effects is not valid
+XML to generic tools, as noted in the Kdenlive file format documentation.
+.SH LIMITATIONS
+Kdenlive only, Linux only. Project files must be document version 1.1, which
+is what Kdenlive 23.04 and later write. Older projects are refused with a
+message rather than parsed approximately; opening one in Kdenlive and saving
+it upgrades the format.
+.PP
+There is no merge command, no team or cloud features, and no graphical
+interface.
+.SH EXIT STATUS
+.TP
+.B 0
+Success.
+.TP
+.B 1
+The command failed. The reason is printed to standard error.
+.SH SEE ALSO
+.BR kdenlive (1),
+.BR git (1)
+.PP
+The Kdenlive file format documentation, which is the primary reference this
+tool was built against:
+.br
+.I https://github.com/KDE/kdenlive/blob/master/dev\-docs/fileformat.md

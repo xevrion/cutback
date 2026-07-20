@@ -5,10 +5,15 @@ edition = "2021"
 rust-version = "1.82"
 description = "Automatic version control for Kdenlive projects"
 license = "MIT"
+repository = "https://github.com/xevrion/cutback"
+readme = "README.md"
+keywords = ["kdenlive", "video-editing", "version-control"]
+categories = ["command-line-utilities"]
 
 [dependencies]
 anyhow = "1.0"
 clap = { version = "4.5", features = ["derive"] }
+clap_complete = "4.5"
 git2 = { version = "0.19", default-features = false }
 notify = "6.1"
 roxmltree = "0.20"
