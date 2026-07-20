@@ -178,9 +178,20 @@ fn branch_and_checkout_round_trip() {
     let file = s.path().join("holiday.kdenlive");
 
     assert!(run(&["branch", "-C", dir, "alt-cut"]).ok);
-    assert!(run(&["branch", "-C", dir]).stdout.contains("alt-cut"));
+    let listing = run(&["branch", "-C", dir]).stdout;
+    assert!(listing.contains("alt-cut"), "{listing}");
 
-    let on_main = std::fs::read(&file).unwrap();
+    // The starting branch is whatever init.defaultBranch gave us, master on a
+    // stock git and main on most configured ones, so read it rather than
+    // assuming. The listing marks the current branch with a star.
+    let original = listing
+        .lines()
+        .find(|l| l.starts_with('*'))
+        .and_then(|l| l.split_whitespace().nth(1))
+        .expect("the branch listing marks the current branch")
+        .to_string();
+
+    let on_original = std::fs::read(&file).unwrap();
     assert!(run(&["checkout", "-C", dir, "alt-cut"]).ok);
 
     let first = run(&["log", "-C", dir])
@@ -194,10 +205,11 @@ fn branch_and_checkout_round_trip() {
         .to_string();
     run(&["restore", "-C", dir, &first, "-y"]);
 
-    assert!(run(&["checkout", "-C", dir, "main"]).ok);
+    let back = run(&["checkout", "-C", dir, &original]);
+    assert!(back.ok, "{}", back.stderr);
     assert_eq!(
         std::fs::read(&file).unwrap(),
-        on_main,
+        on_original,
         "switching back should restore the branch's own state"
     );
 }

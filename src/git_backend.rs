@@ -237,8 +237,20 @@ impl Store {
     pub fn current_branch(&self) -> Result<String> {
         let head = match self.repo.head() {
             Ok(head) => head,
-            // A fresh repository has no HEAD commit yet.
-            Err(e) if e.code() == git2::ErrorCode::UnbornBranch => return Ok("main".to_string()),
+            // Before the first commit HEAD points at a branch that does not
+            // exist yet. Read the name it points at rather than assuming one,
+            // since it comes from init.defaultBranch and is master on a stock
+            // git install and main on most configured ones.
+            Err(e) if e.code() == git2::ErrorCode::UnbornBranch => {
+                let name = self
+                    .repo
+                    .find_reference("HEAD")
+                    .ok()
+                    .and_then(|head| head.symbolic_target().map(str::to_string))
+                    .and_then(|target| target.strip_prefix("refs/heads/").map(str::to_string))
+                    .unwrap_or_else(|| "master".to_string());
+                return Ok(name);
+            }
             Err(e) => return Err(e.into()),
         };
         Ok(head.shorthand().unwrap_or("HEAD").to_string())
